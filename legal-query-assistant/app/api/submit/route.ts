@@ -3,13 +3,39 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   const { query, fileName } = await request.json();
 
-  // Simulate 2-second AI processing delay
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  try {
+    const grokResponse = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.GROK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "grok-3-mini", // Cheapest model
+        messages: [
+          {
+            role: "user",
+            content: `Legal query: ${query}\nDocument uploaded: ${fileName}`,
+          },
+        ],
+        max_tokens: 500, // Limit output to control costs
+      }),
+    });
 
-  const response = {
-    queryResponse: `Analysis of query: "${query}". This is a mock legal response based on the provided input.`,
-    summary: `Summary of ${fileName}: This is a mock summary of the uploaded document.`,
-  };
+    if (!grokResponse.ok) {
+      throw new Error(`API request failed with status ${grokResponse.status}`);
+    }
 
-  return NextResponse.json(response);
+    const data = await grokResponse.json();
+    const responseContent =
+      data.choices?.[0]?.message?.content || "No response";
+
+    return NextResponse.json({
+      queryResponse: responseContent,
+      summary: `Summary of ${fileName}: ${responseContent.slice(0, 200)}...`, // Mock summary for testing
+    });
+  } catch (error) {
+    console.error("Grok API error:", error);
+    return NextResponse.json({ error: "API request failed" }, { status: 500 });
+  }
 }
